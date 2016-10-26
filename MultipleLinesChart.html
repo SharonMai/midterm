@@ -6,34 +6,66 @@ body {
   font: 10px sans-serif;
 }
 
+ 
+path { 
+    stroke: steelblue;
+    stroke-width: 2;
+    fill: none;
+}
 
-
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+div.tooltip {	
+    position: absolute;			
+    text-align: left;			
+    width: 80px;					
+    height: 90px;					
+    padding: 2px;				
+    font: 12px sans-serif;		
+    background: lightsteelblue;	
+    border: 0px;		
+    border-radius: 8px;			
+    pointer-events: none;			
+}
+.legend rect {
+  fill:white;
+  stroke:black;
+  opacity:0.8;}
 </style>
 <body>
+
 <script src="http://d3js.org/d3.v3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+<script src="d3.legend.js"></script>
 <script>
-var margin = {top: 30, right: 20, bottom: 30, left: 50},
-    width = 600 - margin.left - margin.right,
-    height = 270 - margin.top - margin.bottom;
+var margin = {top: 60, right: 50, bottom: 60, left: 50},
+    width = 800 - margin.left - margin.right,//set the width
+    height = 500 - margin.top - margin.bottom;
 
-// Parse the date / time
+
 
 // Set the ranges
 var x = d3.scale.linear().range([0, width]);
 var y = d3.scale.linear().range([height, 0]);
-
+var div = d3.select("body").append("div")	
+    .attr("class", "tooltip")				
+    .style("opacity", 0);
 // Define the axes
 var xAxis = d3.svg.axis().scale(x)
     .orient("bottom").ticks(5);
-
+    
 var yAxis = d3.svg.axis().scale(y)
     .orient("left").ticks(5);
 
 // Define the line
 var priceline = d3.svg.line() 
-    .x(function(d) { return x(d.date); })
-    .y(function(d) { return y(d.price); });
+    .x(function(d) { return x(d.key); })
+    .y(function(d) { return y(d.ratio); });
     
 // Adds the svg canvas
 var svg = d3.select("body")
@@ -44,7 +76,7 @@ var svg = d3.select("body")
         .attr("transform", 
               "translate(" + margin.left + "," + margin.top + ")");
 
-
+// import data from csv file
 d3.csv("income.csv", function(error, data) {
   if (error) throw error;
 
@@ -55,47 +87,20 @@ d3.csv("income.csv", function(error, data) {
     d.hoursperweek=+d.hoursperweek;
   });
     
-var counts=new Array();
-for (var i=0;i<data.length;i++){
-    var key=data[i].sex+','+data[i].age;
-    if (counts[key]){
-       if (data[i].f==' >50K'){
-       counts[key].sum ++;
-       counts[key].over ++; 
-           } else{
-       counts[key].sum ++;
-       counts[key].below ++;    
-           }
-           
-    } else 
-    {if (data[i].f==' >50K')
-        {counts[key]=
-         {
-           sum:1,
-           sex:data[i].sex,
-           age:data[i].age,
-           over:1,
-           below:0,
-         }
-        } else{
-            counts[key]={
-           sum:1,
-           sex:data[i].sex,
-           age:data[i].age,
-           over:0,
-           below:1,
-            }
-         }
-    }
-}
 
-var dataNest=d3.nest()
+x.domain(d3.extent(data, function(d) { return d.age; }));//set x domain
+y.domain([0, 0.7]);//set y domain
+var color = d3.scale.category10();  // set the colour scale
+var dataNest=d3.nest()// classified data by sex,age and salary
                .key(function(d) {return d.sex;})
                .key(function(d) {return d.age;})
                .key(function(d) {return d.f;})
+               .sortKeys(d3.ascending )
                .rollup(function(leaves) { return leaves.length; })
                .entries(data);
+    
 dataNest.forEach(function(d){
+    var sex=d.key
     d.values.forEach(function(d){
         if (d.values[0]) {
            var a=d.values[0].values;
@@ -107,11 +112,75 @@ dataNest.forEach(function(d){
         } else{
             var b=0;
         }
-        d.ratio=b/(a+b)
+        d.ratio=b/(a+b)// calculate the ratio of people whose salary above 50K  
+        d.total=a+b
+        d.above=b;
+        d.under=a;
+        d.sex=sex;
     })
 })
 
-console.log(dataNest)
+dataNest.forEach(function(d) {// draw lines for both of male and female, x axis is age, y axis is the ratio
+        svg.append("path")
+            .attr("class", "line")
+            .style("stroke", function() { // Add dynamically
+                return d.color = color(d.key); })
+            .attr("d", priceline(d.values))
+            .attr("data-legend",d.key);
+
+    });
+dataNest.forEach(function(d){
+   
+     svg.selectAll("dot")	//for each data on the lines, creat a dot
+        .data(d.values)			
+        .enter().append("circle")				
+        .attr("r", 3)
+        .attr("opacity",.4)
+        .attr("cx", function(d) { return x(d.key); })		 
+        .attr("cy", function(d) { return y(d.ratio); })		
+        .on("mouseover", function(d) {	// when your mouse move to the dot, it will show the details of the data
+          
+        
+             
+            div.transition()		
+                .duration(200)		
+                .style("opacity", .9);	//the details will show up	
+            div	.html("sex:"+d.sex + "<br/>"  +"age:"+d.key + "<br/>"  +"ratio:"+d.ratio.toFixed(2)+ "<br/>"  +"#of total:"+d.total+ "<br/>"  +"#of<=50K:"+d.under+ "<br/>"  +"#of>50K:"+d.above)	//show the age and ratio
+                .style("left", (d3.event.pageX) + "px")		
+                .style("top", (d3.event.pageY-90) + "px");	
+            })					
+        .on("mouseout", function(d) {		
+            div.transition()		
+                .duration(500)		
+                .style("opacity", 0);	
+        });
+});
+
+    svg.append("text")
+        .attr("x", (width / 2))             
+        .attr("y", 0 - (margin.top / 2))
+        .attr("text-anchor", "middle")  
+        .style("font-size", "12px") 
+        .style("font", "sans-serif")  
+        .text("The Comparison of Ratio of Salary above 50K by Sex");
+     svg.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + height + ")")
+        .call(xAxis);
+
+    // Add the Y Axis
+    svg.append("g")
+        .attr("class", "y axis")
+        .call(yAxis);
+  legend = svg.append("g")
+    .attr("class","legend")
+    .attr("transform","translate(50,30)")
+    .style("font-size","12px")
+    .call(d3.legend)
+
 });
 
 </script>
+<p> This program imports data from a csv file. The data set called <a href="https://archive.ics.uci.edu/ml/datasets/Adult">
+'Adult' </a> is a dataset from UCI Machine Learning Repository. This program calculates the ratio of people whose salary are above 50K of different sex and age. When your mouse move on the dots on the lines, more detail will show up. This graph shows that the ratio of male whose salary are above 50K is obviously higher than ones of female.</p>
+</body>
