@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+body {
+  font: 10px sans-serif;
+}
+</style>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+//define margin,width and height of the bar chart
+var margin = {top: 100, right: 20, bottom: 100, left: 40},
+    width = window.innerWidth - margin.left - margin.right,
+    height = window.innerHeight - margin.top - margin.bottom;
+
+//define the variables
+var x0 = d3.scale.ordinal()
+    .rangeRoundBands([0, width], .1);
+
+var x1 = d3.scale.ordinal();
+
+var y = d3.scale.linear()
+    .range([height, 0]);
+    
+//define the colors
+var color = d3.scale.ordinal()
+    .range(["#98abc5", "#8a89a6"]);
+
+//define the coordinate axis 
+var xAxis = d3.svg.axis()
+    .scale(x0)
+    .orient("bottom");
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left")
+    .tickFormat(d3.format(".2s"));
+
+//define svg attributes
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    
+    
+//load data    
+d3.csv("income.csv", function(error, data) {
+  if (error) throw error;
+data.forEach(function(d) {
+    d.age=+d.age;
+    d.fnlwgt=+d.fnlwgt;
+    d.educationnum=+d.educationnum;
+    d.hoursperweek=+d.hoursperweek;
+  });
+
+//nest data keys: sex and f
+var dataNest = d3.nest()
+        .key(function(d) {return d.sex;})
+        .key(function(d) {return d.f})
+        .sortKeys(d3.asending)
+        .rollup(function(leaves) {return leaves.length})
+        .entries(data);
+var financeNames = ["exceed","below"];
+    console.log(financeNames)
+    console.log((dataNest[0].values[0]))
+     dataNest.forEach(function(d){
+      d.below=d.values[0].values;
+      d.exceed=d.values[1].values;
+  })
+dataNest.forEach(function(d) {
+  d.temp=new Object();
+  d.temp[0]=d.values[0];
+  d.temp[1]=d.values[1];
+});
+dataNest.forEach(function(d) {
+  console.log(d)
+  d.finance = financeNames.map(function(temp) {return {key: temp, value: +d[temp]}; })
+});
+
+//define the domains  
+x0.domain(data.map(function(d) { return d.sex; }));
+x1.domain(financeNames).rangeRoundBands([0,x0.rangeBand()]);
+y.domain([0, 1.3*d3.max(dataNest.map(function(d) {return  d3.max((Object.keys(d.temp).map(function(temp1){  return d.temp[temp1].values}) )) }) )]);
+
+//create x and y axis
+svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 2)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Population");
+
+//create the chart title
+svg.append("text")
+        .attr("x", (width / 2))             
+        .attr("y", 0 - (margin.top / 2))
+        .attr("text-anchor", "middle")  
+        .style("font-size", "25px") 
+        .style("font", "sans-serif")  
+        .text("The Comparison of Income exceed and below $50K/yr by Sex");
+
+//define age as key and change its position    
+var key = svg.selectAll(".key")
+      .data(dataNest)
+    .enter().append("g")
+      .attr("class", "key")
+      .attr("transform", function(d) { return "translate(" + x0(d.key) + ",0)"; });
+
+//draw the bars 
+key.selectAll("rect")
+      .data(function(d) {return d.finance; })
+      .enter().append("rect")
+      .attr("width", x1.rangeBand())
+      .attr("x", function(d) {return x1(d.key); })
+      .attr("y", function(d) {return y(d.value); })
+      .attr("height", function(d) { return height - y(d.value); })
+      .style("fill", function(d) { return color(d.key); });
+
+//define the ledend    
+var legend = svg.selectAll(".legend")
+      .data(financeNames.slice().reverse())
+    .enter().append("g")
+      .attr("class", "legend")
+      .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+//create the legend
+  legend.append("rect")
+      .attr("x", width - 18)
+      .attr("width", 18)
+      .attr("height", 18)
+      .style("fill", color);
+  legend.append("text")
+      .attr("x", width - 24)
+      .attr("y", 9)
+      .attr("dy", ".35em")
+      .style("text-anchor", "end")
+      .text(function(d) { return d; });
+
+});
+ </script>
+    <p style="font-size:160%;">This is a grouped bar chart visualizing the census income date set from UIC machine learning repository. This data set shows whether income exceeds $50K/yr based on census data. It is easy to compare tow categories of income by sex in the grouped bar chart.</p>
+</body>
